@@ -3,19 +3,22 @@ import numpy as np
 from concurrent.futures.thread import ThreadPoolExecutor
 from glob import glob
 import os
+from sklearn.model_selection import train_test_split
 
 
 class Image:
-    def __init__(self, image_file):
+    def __init__(self, image_file, divide=False, reshape=False):
         self.image_file = image_file
+        self.divide = divide
+        self.reshape = reshape
         self.data = self.__load_file()
 
-    def __load_file(self, target_size=(512, 512), divide=False, reshape=False):
+    def __load_file(self, target_size=(512, 512)):
         img = cv2.imread(self.image_file, cv2.IMREAD_GRAYSCALE)
-        if divide:
+        if self.divide:
             img = img / 255
         img = cv2.resize(img, target_size)
-        if reshape:
+        if self.reshape:
             img = np.reshape(img, img.shape + (1,))
             img = np.reshape(img, (1,) + img.shape)
         return img
@@ -31,16 +34,19 @@ class Image:
 
 
 class ImageGenerator:
-    def generate_from(self, path):
+    def generate_from(self, path, divide=False, reshape=False, only_data=False):
         image_files = glob(path + "/*g")
         for image_file in image_files:
-            yield Image(image_file)
+            if only_data:
+                yield Image(image_file, divide, reshape).data
+            else:
+                yield Image(image_file, divide, reshape)
 
-    def generate_image_data(self,
-                            covid_path,
-                            covid_masks_path,
-                            non_covid_path,
-                            non_covid_masks_path):
+    def generate_preprocessing_data(self,
+                                    covid_path,
+                                    covid_masks_path,
+                                    non_covid_path,
+                                    non_covid_masks_path):
         with ThreadPoolExecutor() as executor:
             covid_images = executor.submit(self.generate_from, covid_path)
             covid_masks = executor.submit(self.generate_from, covid_masks_path)
@@ -51,6 +57,31 @@ class ImageGenerator:
                 self.generate_from, non_covid_masks_path)
 
             return [covid_images, covid_masks, non_covid_images, non_covid_masks]
+
+    def generate_classificator_data(self, covid_path, non_covid_path, divide=True, reshape=False):
+        with ThreadPoolExecutor() as executor:
+            covid_images = executor.submit(
+                self.generate_from, covid_path, divide, reshape, True)
+
+            non_covid_images = executor.submit(
+                self.generate_from, non_covid_path, divide, reshape, True)
+
+            covid_images = list(covid_images.result())
+            non_covid_images = list(non_covid_images.result())
+
+            entries = np.concatenate((covid_images, non_covid_images))
+            entries = np.repeat(entries[..., np.newaxis], 3, -1)
+
+            cov_len = len(covid_images)
+            non_cov_len = len(non_covid_images)
+            results_len = cov_len + non_cov_len
+            results = np.zeros((results_len))
+
+            results[0:cov_len] = 1
+
+            # Split into test and training
+            return train_test_split(
+                entries, results, test_size=0.2, random_state=0)
 
 
 class ImageSaver:

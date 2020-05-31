@@ -18,40 +18,14 @@ import glob
 import cnn
 from sklearn.model_selection import train_test_split
 import keras
+from image import ImageGenerator
 
 # %%Read images
 covid_path = os.path.join('cov_processed')
 non_covid_path = os.path.join('non_cov_processed')
 
-
-def readImages(path):
-    images = []
-    for file in glob.glob(path + "/*g"):
-        img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
-        img = cv2.resize(img, (512, 512))
-        #img = cv2.equalizeHist(img)
-        images.append(img)
-    return images
-
-
-with ThreadPoolExecutor() as executor:
-    covid_images = executor.submit(readImages, covid_path)
-    non_covid_images = executor.submit(readImages, non_covid_path)
-
-entries = np.concatenate((covid_images.result(), non_covid_images.result()))
-entries = np.repeat(entries[..., np.newaxis], 3, -1)
-
-cov_len = len(covid_images.result())
-non_cov_len = len(non_covid_images.result())
-results_len = cov_len + non_cov_len
-results = np.zeros((results_len))
-
-results[0:cov_len] = 1
-
-
-# %%Split into test and training
-X_train, X_test, y_train, y_test = train_test_split(
-    entries, results, test_size=0.2, random_state=0)
+X_train, X_test, y_train, y_test = ImageGenerator(
+).generate_classificator_data(covid_path, non_covid_path)
 
 # %%Create CNN model
 model = cnn.model()

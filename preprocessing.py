@@ -35,7 +35,7 @@ seg(non_covid_path, 'non_cov_masks')
 # %%Read images
 generator = ImageGenerator()
 
-covid_images, covid_masks, non_covid_images, non_covid_masks = generator.generate_image_data(
+covid_images, covid_masks, non_covid_images, non_covid_masks = generator.generate_preprocessing_data(
     covid_path,
     covid_masks_path,
     non_covid_path,
